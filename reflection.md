@@ -5,13 +5,29 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+    - 
 - What classes did you include, and what responsibilities did you assign to each?
+    - Owner
+        - Attributes: int ownerID, String ownerName, Pet[] pets, Task[] tasks, String ownerPreferences
+        - Methods: addPet(Pet pet), setOwnerPreferences(String preferences), generateSchedule(), displaySchedule()
+    - Pet
+        - Attributes: int petID, String species, String petName, String ownerName
+        - Methods: getownerName()
+    - Task
+        - Attributes: int taskID, String taskType, double duration, int priority
+        - Methods:
+        setTaskType(String taskType) --> walk, feed, med, enrichment, grooming, setDuration(double duration), setPriority(int rank)
 
 **b. Design changes**
 
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
 
+
+**c.  3 core actions:**
+1) Let a user enter basic owner + pet info
+2) Let a user add/edit tasks (duration + priority at minimum)
+3) Generate a daily schedule/plan based on constraints and priorities. The app should explain its plan.
 ---
 
 ## 2. Scheduling Logic and Tradeoffs
