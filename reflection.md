@@ -5,7 +5,7 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
-    - 
+    - There will be 3 classes: owner, pet, and task. The Owner owns pet(s) and manages tasks. An owner can have 0 or many pets and tasks.
 - What classes did you include, and what responsibilities did you assign to each?
     - Owner
         - Attributes: int ownerID, String ownerName, Pet[] pets, Task[] tasks, String ownerPreferences
@@ -20,9 +20,31 @@
 
 **b. Design changes**
 
-- Did your design change during implementation?
+- Did your design change during implementation? Yes
 - If yes, describe at least one change and why you made it.
+1. **Added a TaskType menu (Enum)**
+    - Before, task types were typed as plain text — someone could accidentally write "wlak" instead of "walk" and the app wouldn't catch it. Now only valid options (walk, feed, med, enrichment, grooming) are allowed.
 
+2. **Pet now stores the owner's ID, not their name**
+    - Before, Pet stored the owner's name as text. If the owner ever changed their name, the pet's record would show the old name. Using the ID keeps both records in sync automatically.
+
+3. **Task now knows which pet it belongs to**
+    - Tasks like "feed" or "walk" are done for a specific pet, but the original design didn't track that. Adding petID to Task makes that connection explicit, which the schedule display uses to show the pet's name.
+
+4. **OwnerPreferences became its own structured object**
+    - Before, owner preferences were a single text blob the app couldn't read or act on. Now it's a proper object with specific fields — preferred walk time and task types to avoid — so the scheduler can actually use these preferences to filter and plan.
+
+5. **Added addTask with a duplicate priority check**
+    - Without this, two tasks could have the same priority number, making it unclear which should come first. Now the app raises an error if you try to add a task with a priority that's already taken.
+
+6. **Added removePet and removeTask**
+    - The original design could only add pets and tasks, never remove them. Your app's core requirements include editing tasks, so these methods were necessary.
+
+7. **generateSchedule now takes a time budget**
+    - Before it was an empty placeholder. Now it accepts the number of available minutes, skips task types the owner wants to avoid, sorts by priority, and fits as many tasks as possible into the time window.
+
+8. **displaySchedule now prints a readable plan**
+    - Also previously empty. It now calls generateSchedule and prints each task with its priority, type, pet name, and duration in a numbered list.
 
 **c.  3 core actions:**
 1) Let a user enter basic owner + pet info
