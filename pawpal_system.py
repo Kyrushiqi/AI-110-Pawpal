@@ -3,6 +3,7 @@ from enum import Enum
 
 
 class TaskType(Enum):
+    """Enumeration of possible task types for pet care."""
     WALK = "walk"
     FEED = "feed"
     MED = "med"
@@ -10,84 +11,168 @@ class TaskType(Enum):
     GROOMING = "grooming"
 
 
-@dataclass
-class Pet:
-    petID: int
-    species: str
-    petName: str
-    ownerID: int  # reference by ID to avoid sync issues with Owner
+class Frequency(Enum):
+    """Enumeration of possible frequencies for tasks."""
+    DAILY = "daily"
+    WEEKLY = "weekly"
+    MONTHLY = "monthly"
+    AS_NEEDED = "as_needed"
 
 
 @dataclass
 class Task:
+    """Represents a single care activity assigned to a pet, with scheduling metadata and completion state."""
     taskID: int
     taskType: TaskType
-    duration: float  # in minutes
-    priority: int    # lower number = higher priority; must be unique across tasks
-    petID: int       # which pet this task belongs to
+    description: str
+    duration: float       # in minutes
+    frequency: Frequency
+    priority: int         # lower number = higher priority; must be unique per pet
+    petID: int = 0        # which pet this task belongs to
+    is_completed: bool = False
+
+    def complete(self):
+        """Mark this task as completed."""
+        self.is_completed = True
+
+    def reset(self):
+        """Reset this task to incomplete."""
+        self.is_completed = False
 
     def setTaskType(self, taskType: TaskType):
+        """Update the type of care this task represents."""
         self.taskType = taskType
 
+    def setDescription(self, description: str):
+        """Update the human-readable description of this task."""
+        self.description = description
+
     def setDuration(self, duration: float):
+        """Update the estimated duration of this task in minutes."""
         self.duration = duration
 
+    def setFrequency(self, frequency: Frequency):
+        """Update how often this task should recur."""
+        self.frequency = frequency
+
     def setPriority(self, rank: int):
+        """Update the scheduling priority; lower number means higher priority."""
         self.priority = rank
 
 
 @dataclass
-class OwnerPreferences:
-    preferred_walk_time: str = "morning"   # "morning", "afternoon", "evening"
-    avoid_task_types: list[TaskType] = field(default_factory=list)
+class Pet:
+    """Represents a pet belonging to an owner, holding all of that pet's care tasks."""
+    petID: int
+    species: str
+    petName: str
+    ownerID: int           # reference by ID to avoid sync issues with Owner
+    tasks: list[Task] = field(default_factory=list)
+
+    def addTask(self, task: Task):
+        """Add a task to this pet, raising ValueError if its priority is already taken."""
+        if any(t.priority == task.priority for t in self.tasks):
+            raise ValueError(f"A task with priority {task.priority} already exists for {self.petName}.")
+        self.tasks.append(task)
+
+    def removeTask(self, taskID: int):
+        """Remove the task with the given ID from this pet's task list."""
+        self.tasks = [t for t in self.tasks if t.taskID != taskID]
+
+    def getTask(self, taskID: int) -> Task | None:
+        """Return the task matching taskID, or None if not found."""
+        return next((t for t in self.tasks if t.taskID == taskID), None)
+
+    def getPendingTasks(self) -> list[Task]:
+        """Return all incomplete tasks for this pet."""
+        return [t for t in self.tasks if not t.is_completed]
 
 
 @dataclass
 class Owner:
+    """Represents a pet owner with their preferences and the list of pets they are responsible for."""
     ownerID: int
     ownerName: str
     pets: list[Pet] = field(default_factory=list)
-    tasks: list[Task] = field(default_factory=list)
-    ownerPreferences: OwnerPreferences = field(default_factory=OwnerPreferences)
+    preferred_walk_time: str = "morning"        # "morning", "afternoon", "evening"
+    avoid_task_types: list[TaskType] = field(default_factory=list)
 
     def addPet(self, pet: Pet):
+        """Add a pet to this owner's pet list."""
         self.pets.append(pet)
 
     def removePet(self, petID: int):
+        """Remove the pet with the given ID from this owner's pet list."""
         self.pets = [p for p in self.pets if p.petID != petID]
 
-    def addTask(self, task: Task):
-        if any(t.priority == task.priority for t in self.tasks):
-            raise ValueError(f"A task with priority {task.priority} already exists.")
-        self.tasks.append(task)
+    def getPet(self, petID: int) -> Pet | None:
+        """Return the pet matching petID, or None if not found."""
+        return next((p for p in self.pets if p.petID == petID), None)
 
-    def removeTask(self, taskID: int):
-        self.tasks = [t for t in self.tasks if t.taskID != taskID]
+    def getAllTasks(self) -> list[Task]:
+        """Return every task across all of this owner's pets."""
+        return [task for pet in self.pets for task in pet.tasks]
 
-    def setOwnerPreferences(self, preferences: OwnerPreferences):
-        self.ownerPreferences = preferences
+
+class Scheduler:
+    """
+    The brain of PawPal. Retrieves, organizes, and manages tasks across all
+    pets belonging to an owner, respecting owner preferences.
+    """
+
+    def __init__(self, owner: Owner):
+        """Bind the scheduler to a single owner whose pets and tasks it will manage."""
+        self.owner = owner
+
+    def getAllTasks(self) -> list[Task]:
+        """Return every task across all pets owned by this owner."""
+        return self.owner.getAllTasks()
+
+    def getPendingTasks(self) -> list[Task]:
+        """Return all incomplete tasks across every pet."""
+        return [t for t in self.getAllTasks() if not t.is_completed]
+
+    def getTasksByPriority(self, pending_only: bool = False) -> list[Task]:
+        """Return tasks sorted by priority, excluding avoided task types."""
+        tasks = self.getPendingTasks() if pending_only else self.getAllTasks()
+        avoid = self.owner.avoid_task_types
+        eligible = [t for t in tasks if t.taskType not in avoid]
+        return sorted(eligible, key=lambda t: t.priority)
+
+    def getTasksByPet(self, petID: int, pending_only: bool = False) -> list[Task]:
+        """Return tasks for a specific pet sorted by priority, or an empty list if the pet doesn't exist."""
+        pet = self.owner.getPet(petID)
+        if pet is None:
+            return []
+        tasks = pet.getPendingTasks() if pending_only else pet.tasks
+        return sorted(tasks, key=lambda t: t.priority)
+
+    def markTaskComplete(self, taskID: int) -> bool:
+        """Marks a task complete by ID. Returns True if found, False otherwise."""
+        for task in self.getAllTasks():
+            if task.taskID == taskID:
+                task.complete()
+                return True
+        return False
+
+    def resetDailyTasks(self):
+        """Resets completion status for all DAILY tasks (call at start of each day)."""
+        for task in self.getAllTasks():
+            if task.frequency == Frequency.DAILY:
+                task.reset()
 
     def generateSchedule(self, available_minutes: float) -> list[Task]:
-        """
-        Returns tasks sorted by priority that fit within available_minutes.
-        Excludes task types the owner wants to avoid.
-        """
-        eligible = [
-            t for t in self.tasks
-            if t.taskType not in self.ownerPreferences.avoid_task_types
-        ]
-        sorted_tasks = sorted(eligible, key=lambda t: t.priority)
-
+        """Return the highest-priority pending tasks that fit within available_minutes, excluding avoided types."""
         schedule = []
         remaining = available_minutes
-        for task in sorted_tasks:
+        for task in self.getTasksByPriority(pending_only=True):
             if task.duration <= remaining:
                 schedule.append(task)
                 remaining -= task.duration
-
         return schedule
 
     def displaySchedule(self, available_minutes: float):
+        """Print a formatted daily schedule of tasks that fit within available_minutes."""
         schedule = self.generateSchedule(available_minutes)
         if not schedule:
             print("No tasks fit within the available time.")
@@ -95,7 +180,9 @@ class Owner:
 
         print(f"Daily Schedule ({available_minutes} min available):")
         for i, task in enumerate(schedule, start=1):
-            pet = next((p for p in self.pets if p.petID == task.petID), None)
+            pet = self.owner.getPet(task.petID)
             pet_name = pet.petName if pet else f"Pet {task.petID}"
-            print(f"  {i}. [{task.priority}] {task.taskType.value} "
-                  f"for {pet_name} — {task.duration} min")
+            status = "done" if task.is_completed else "pending"
+            print(f"  {i}. [{task.priority}] {task.taskType.value} for {pet_name}"
+                  f" — {task.duration} min | {task.frequency.value} | {status}"
+                  f"\n     {task.description}")
