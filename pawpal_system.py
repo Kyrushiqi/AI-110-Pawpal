@@ -27,7 +27,7 @@ class Task:
     description: str
     duration: float       # in minutes
     frequency: Frequency
-    priority: int         # lower number = higher priority; must be unique per pet
+    priority: str         # "High", "Medium", or "Low"
     petID: int = 0        # which pet this task belongs to
     is_completed: bool = False
 
@@ -55,8 +55,8 @@ class Task:
         """Update how often this task should recur."""
         self.frequency = frequency
 
-    def setPriority(self, rank: int):
-        """Update the scheduling priority; lower number means higher priority."""
+    def setPriority(self, rank: str):
+        """Update the scheduling priority: 'High', 'Medium', or 'Low'."""
         self.priority = rank
 
 
@@ -70,9 +70,7 @@ class Pet:
     tasks: list[Task] = field(default_factory=list)
 
     def addTask(self, task: Task):
-        """Add a task to this pet, raising ValueError if its priority is already taken."""
-        if any(t.priority == task.priority for t in self.tasks):
-            raise ValueError(f"A task with priority {task.priority} already exists for {self.petName}.")
+        """Add a task to this pet."""
         self.tasks.append(task)
 
     def removeTask(self, taskID: int):
@@ -132,12 +130,14 @@ class Scheduler:
         """Return all incomplete tasks across every pet."""
         return [t for t in self.getAllTasks() if not t.is_completed]
 
+    _PRIORITY_ORDER = {"High": 0, "Medium": 1, "Low": 2}
+
     def getTasksByPriority(self, pending_only: bool = False) -> list[Task]:
-        """Return tasks sorted by priority, excluding avoided task types."""
+        """Return tasks sorted High → Medium → Low, excluding avoided task types."""
         tasks = self.getPendingTasks() if pending_only else self.getAllTasks()
         avoid = self.owner.avoid_task_types
         eligible = [t for t in tasks if t.taskType not in avoid]
-        return sorted(eligible, key=lambda t: t.priority)
+        return sorted(eligible, key=lambda t: self._PRIORITY_ORDER.get(t.priority, 99))
 
     def getTasksByPet(self, petID: int, pending_only: bool = False) -> list[Task]:
         """Return tasks for a specific pet sorted by priority, or an empty list if the pet doesn't exist."""
