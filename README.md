@@ -22,6 +22,16 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## Smarter Scheduling
+
+The `Scheduler` class was extended with five new features beyond basic priority sorting:
+
+- **`sort_by_time(pending_only, descending)`** — sorts tasks by their `HH:MM` start time, earliest to latest by default. Pass `descending=True` to reverse, or `pending_only=True` to hide completed tasks.
+- **`filter_tasks_by_pet_name()`** — returns all tasks across every pet, alphabetically grouped by pet name (Buddy → Mochi → Zeze).
+- **`_enqueueNextOccurrence`** — called automatically when a daily, weekly, or monthly task is marked complete. Creates a fresh pending copy so recurring tasks never fall off the schedule.
+- **`check_conflict(task)`** — pre-add safety check. Before inserting a new task, call this to get a plain-English warning if another pending task already owns that time slot. Returns `None` if the slot is free.
+- **`detect_conflicts()`** — full schedule audit. Scans all pending tasks and returns a dict of every time slot where two or more tasks overlap. Completed tasks are excluded, so finishing a task clears it from the conflict report.
+
 ## Getting started
 
 ### Setup

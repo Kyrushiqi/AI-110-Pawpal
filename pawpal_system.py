@@ -30,6 +30,7 @@ class Task:
     priority: str         # "High", "Medium", or "Low"
     petID: int = 0        # which pet this task belongs to
     is_completed: bool = False
+    time: str = "00:00"   # scheduled time of day in "HH:MM" 24-hour format
 
     def complete(self):
         """Mark this task as completed."""
@@ -145,15 +146,40 @@ class Scheduler:
         if pet is None:
             return []
         tasks = pet.getPendingTasks() if pending_only else pet.tasks
-        return sorted(tasks, key=lambda t: t.priority)
+        return sorted(tasks, key=lambda t: self._PRIORITY_ORDER.get(t.priority, 99))
+
+    _RECURRING = {Frequency.DAILY, Frequency.WEEKLY, Frequency.MONTHLY}
 
     def markTaskComplete(self, taskID: int) -> bool:
-        """Marks a task complete by ID. Returns True if found, False otherwise."""
+        """Mark a task complete by ID and, for recurring frequencies, enqueue the next occurrence.
+
+        Returns True if the task was found, False otherwise.
+        """
         for task in self.getAllTasks():
             if task.taskID == taskID:
                 task.complete()
+                if task.frequency in self._RECURRING:
+                    self._enqueueNextOccurrence(task)
                 return True
         return False
+
+    def _enqueueNextOccurrence(self, completed_task: Task):
+        """Copy a completed recurring task as a new pending entry, assigning it the next available ID."""
+        all_ids = [t.taskID for t in self.getAllTasks()]
+        new_id = max(all_ids) + 1 if all_ids else 1
+        pet = self.owner.getPet(completed_task.petID)
+        if pet is None:
+            return
+        pet.addTask(Task(
+            taskID=new_id,
+            taskType=completed_task.taskType,
+            description=completed_task.description,
+            duration=completed_task.duration,
+            frequency=completed_task.frequency,
+            priority=completed_task.priority,
+            petID=completed_task.petID,
+            time=completed_task.time,
+        ))
 
     def resetDailyTasks(self):
         """Resets completion status for all DAILY tasks (call at start of each day)."""
@@ -170,6 +196,32 @@ class Scheduler:
                 schedule.append(task)
                 remaining -= task.duration
         return schedule
+
+    def filter_tasks_by_pet_name(self) -> list[Task]:
+        """Return all tasks (pending and done) grouped and sorted alphabetically by pet name."""
+        return sorted(self.getAllTasks(), key=lambda t: self.owner.getPet(t.petID).petName)
+
+    def sort_by_time(self, pending_only: bool = False, descending: bool = False) -> list[Task]:
+        """Sort tasks by 'HH:MM' start time; pending_only excludes done tasks, descending reverses order."""
+        tasks = self.getPendingTasks() if pending_only else self.getAllTasks()
+        return sorted(tasks, key=lambda t: t.time, reverse=descending)
+
+    def check_conflict(self, task: Task) -> str | None:
+        """Return a warning string if a pending task already occupies the candidate's time slot, else None."""
+        for existing in self.getPendingTasks():
+            if existing.time == task.time:
+                pet = self.owner.getPet(existing.petID)
+                pet_name = pet.petName if pet else f"Pet {existing.petID}"
+                return (f"Warning: '{task.description}' at {task.time} conflicts with "
+                        f"'{existing.description}' ({pet_name})")
+        return None
+
+    def detect_conflicts(self) -> dict[str, list[Task]]:
+        """Return a dict of 'HH:MM' → [Task, ...] for every pending time slot with 2 or more tasks."""
+        time_slots: dict[str, list[Task]] = {}
+        for task in self.getPendingTasks():
+            time_slots.setdefault(task.time, []).append(task)
+        return {time: tasks for time, tasks in time_slots.items() if len(tasks) > 1}
 
     def displaySchedule(self, available_minutes: float):
         """Print a formatted daily schedule of tasks that fit within available_minutes."""

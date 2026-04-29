@@ -59,10 +59,28 @@
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
 - How did you decide which constraints mattered most?
 
+The scheduler considers four main constraints:
+
+1. **Priority** — Tasks are ranked High, Medium, or Low. `generateSchedule` and `getTasksByPriority` always sort by this order so the most critical care (medication, feeding) is handled before optional activities (enrichment, grooming).
+
+2. **Available time budget** — `generateSchedule(available_minutes)` uses a greedy approach: it walks the priority-sorted list and adds each task only if its duration fits within the remaining time. Tasks that don't fit are skipped entirely rather than partially scheduled.
+
+3. **Owner preferences** — The `avoid_task_types` list on the Owner lets the scheduler silently exclude task types the owner doesn't want to handle on a given day. This runs as a filter before any sorting, so avoided tasks never compete for time slots.
+
+4. **Completion status** — Pending and completed tasks are tracked separately. Conflict detection and time-budget scheduling only consider incomplete tasks, so finishing a task clears it from active constraints automatically.
+
+Priority was treated as the most important constraint because a pet's health needs (medication, meals) must be met regardless of how much time is available — it would be wrong for an enrichment task to displace a feeding just because it appeared earlier in the list. Time budget came second because it reflects a real-world limit the owner faces every day. Preferences and completion status act as pre-filters that keep the core scheduling logic simple.
+
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
+
+**Exact time match vs. overlapping duration windows**
+
+`check_conflict()` flags a conflict only when two tasks share the exact same start time (e.g., both at `07:15`). It does not check whether a task's duration causes it to overlap with a later task — for example, a 30-minute walk starting at `07:00` and a feeding starting at `07:15` would not be flagged even though they overlap in real time.
+
+This is a reasonable tradeoff for a pet care app at this stage: most pet tasks (feeding, grooming, medication) are short and discrete, so exact-time collisions are the most common scheduling mistake. Duration-overlap detection would require converting `"HH:MM"` strings into comparable time ranges and handling edge cases like midnight rollovers, adding complexity for a relatively rare scenario. If the app grew to include longer tasks like vet appointments or training sessions, duration-based conflict checking would become a meaningful next step.
 
 ---
 
